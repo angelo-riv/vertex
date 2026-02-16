@@ -42,13 +42,16 @@ IMPORTANT:
 #define SCL_PIN 22        // I2C Clock
 
 #define FSR_LEFT 35       // Analog Input (FSR)
-#define FSR_RIGHT 36      // Analog Input (FSR)
+#define FSR_RIGHT 34      // Analog Input (FSR)
 
 #define MOTOR1 25         // Digital Output
 #define MOTOR2 26         // Digital Output
 
 // Create IMU object (default I2C address 0x28)
 Adafruit_BNO055 bno = Adafruit_BNO055(55, 0x28);
+unsigned long motorStartTime = 0;
+bool motorTurnedOn = false;
+
 
 void setup() {
 
@@ -84,6 +87,11 @@ void setup() {
 
   // Set ADC resolution (0–4095)
   analogReadResolution(12);
+  analogSetAttenuation(ADC_11db);
+
+  motorStartTime = millis();
+
+
 }
 
 void loop() {
@@ -95,8 +103,20 @@ void loop() {
   float pitch = event.orientation.y;
 
   // Read analog FSR values
-  int fsrLeft  = analogRead(FSR_LEFT);
-  int fsrRight = analogRead(FSR_RIGHT);
+// Read raw values
+  int rawLeft  = analogRead(FSR_LEFT);
+  int rawRight = analogRead(FSR_RIGHT);
+
+// Filtering
+  static float fsrLeftFiltered = 0;
+  static float fsrRightFiltered = 0;
+
+  fsrLeftFiltered  = 0.8 * fsrLeftFiltered  + 0.2 * rawLeft;
+  fsrRightFiltered = 0.8 * fsrRightFiltered + 0.2 * rawRight;
+
+  int fsrLeft  = (int)fsrLeftFiltered;
+  int fsrRight = (int)fsrRightFiltered;
+
 
   // Print values to Serial Monitor
   Serial.print("Pitch: ");
@@ -105,6 +125,14 @@ void loop() {
   Serial.print(fsrLeft);
   Serial.print(" | FSR R: ");
   Serial.println(fsrRight);
+
+  // Turn MOTOR1 on after 5 seconds (TEST VALUE)
+  if (!motorTurnedOn && millis() - motorStartTime >= 5000) {
+  pinMode(25,OUTPUT);
+  digitalWrite(25, HIGH);
+  motorTurnedOn = true;
+  Serial.println("MOTOR1 ON");
+  }
 
   delay(100);
 }
