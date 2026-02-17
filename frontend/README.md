@@ -1,70 +1,175 @@
-# Getting Started with Create React App
+# Frontend - Clinical Dashboard
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+React-based web application providing a clinical dashboard for therapists to monitor Pusher Syndrome patients and configure rehabilitation devices.
 
-## Available Scripts
+## Overview
 
-In the project directory, you can run:
+The clinical dashboard provides:
+- Real-time patient monitoring and posture visualization
+- Device configuration and threshold adjustment
+- Patient progress tracking and analytics
+- Therapy session management
+- Clinical reporting and data export
 
-### `npm start`
+## Technology Stack
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+- **Framework**: React 19.2.4
+- **Build Tool**: Create React App (react-scripts 5.0.1)
+- **HTTP Client**: Axios 1.13.5
+- **Testing**: Jest + React Testing Library
+- **Node.js**: 16+ required
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+## Setup Instructions
 
-### `npm test`
+### Prerequisites
+- Node.js 16 or higher
+- npm package manager
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+### Installation
 
-### `npm run build`
+1. **Navigate to frontend directory**
+   ```bash
+   cd frontend
+   ```
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+### Development
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+**Start development server**
+```bash
+npm start
+```
+Opens [http://localhost:3000](http://localhost:3000) in your browser.
+The page will reload when you make changes.
 
-### `npm run eject`
+**Run tests**
+```bash
+npm test
+```
+Launches the test runner in interactive watch mode.
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+**Build for production**
+```bash
+npm run build
+```
+Builds the app for production to the `build` folder.
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+## Project Structure
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+```
+frontend/
+├── public/              # Static assets
+│   ├── index.html      # Main HTML template
+│   └── ...             # Icons, manifest, etc.
+├── src/                # React source code
+│   ├── App.js          # Main application component
+│   ├── App.css         # Application styles
+│   ├── index.js        # React DOM entry point
+│   └── ...             # Components and utilities
+├── package.json        # Dependencies and scripts
+└── README.md          # This file
+```
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+## Planned Features
 
-## Learn More
+### Patient Management
+- Patient registration and profile management
+- Device pairing and configuration
+- Therapy session scheduling
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+### Real-time Monitoring
+- Live posture visualization
+- Sensor data streaming
+- Alert system for concerning patterns
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+### Analytics Dashboard
+- Progress tracking charts
+- Recovery trend analysis
+- Comparative analytics
+- Clinical reporting
 
-### Code Splitting
+### Device Configuration
+- Threshold adjustment interface
+- Calibration tools
+- Feedback intensity settings
+- Safety parameter configuration
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+## Development Guidelines
 
-### Analyzing the Bundle Size
+### Component Structure
+- Use functional components with React Hooks
+- Implement responsive design for tablet/desktop use
+- Follow accessibility guidelines for clinical software
+- Use TypeScript for type safety (planned migration)
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+### API Integration
+- Axios for HTTP requests to backend
+- Real-time updates via WebSocket (planned)
+- Error handling and retry logic
+- Loading states and user feedback
 
-### Making a Progressive Web App
+### Clinical Considerations
+- **User Experience**: Intuitive interface for healthcare professionals
+- **Data Visualization**: Clear, actionable insights from patient data
+- **Accessibility**: WCAG compliance for inclusive design
+- **Performance**: Fast loading for clinical workflow efficiency
+- **Security**: Secure handling of patient data
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+## Testing
 
-### Advanced Configuration
+```bash
+# Run all tests
+npm test
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+# Run tests with coverage
+npm test -- --coverage
 
-### Deployment
+# Run tests in CI mode
+npm test -- --watchAll=false
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+### Testing Strategy
+- Unit tests for components and utilities
+- Integration tests for API interactions
+- End-to-end tests for critical workflows
+- Accessibility testing
 
-### `npm run build` fails to minify
+## Deployment
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+### Production Build
+```bash
+npm run build
+```
+
+### Deployment Options
+- Static hosting (Netlify, Vercel)
+- Docker containerization
+- Hospital/clinic internal servers
+- Cloud platforms (AWS, Azure, GCP)
+
+### Environment Configuration
+Create `.env` files for different environments:
+```
+REACT_APP_API_URL=http://localhost:8000
+REACT_APP_ENVIRONMENT=development
+```
+
+## Contributing
+
+1. Follow React best practices and hooks patterns
+2. Use ESLint and Prettier for code formatting
+3. Write comprehensive tests for new features
+4. Document components with PropTypes or TypeScript
+5. Consider clinical workflow in UX design
+
+## Medical Device Compliance
+
+- Follow FDA guidelines for medical device software
+- Implement audit trails for clinical actions
+- Ensure data privacy and HIPAA compliance
+- Design for reliability in clinical environments
+- Plan for validation and verification testing
