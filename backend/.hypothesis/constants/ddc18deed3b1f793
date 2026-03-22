@@ -1,0 +1,4 @@
+# file: C:\Users\angel\Documents\Programming\projects\vertex\backend\security\secure_logging.py
+# hypothesis_version: 6.151.9
+
+['%Y-%m-%d %H:%M:%S', '@', 'SECURE_LOG_FILE', '[ADDRESS]', '[CARD]', '[EMAIL]', '[IP]', '[PHONE]', '[SSN]', '[UUID]', '\\1: [NAME]', '_', 'address', 'args', 'auth', 'birth_date', 'calibration', 'clinical', 'created', 'credit_card', 'device', 'dob', 'email', 'fastapi', 'filename', 'first_name', 'full_name', 'funcName', 'insurance_number', 'key', 'last_name', 'levelname', 'levelno', 'lineno', 'medical', 'middle_name', 'module', 'mrn', 'msecs', 'msg', 'name', 'password', 'pathname', 'patient', 'patient_name', 'phone', 'process', 'processName', 'relativeCreated', 'secret', 'sensor', 'session', 'social_security', 'ssn', 'supabase', 'thread', 'threadName', 'token', 'user', 'uvicorn', 'vertex.api', 'vertex.clinical', 'vertex.device', 'vertex.security']

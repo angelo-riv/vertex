@@ -1,0 +1,4 @@
+# file: C:\Users\angel\Documents\Programming\projects\vertex\backend\security\https_middleware.py
+# hypothesis_version: 6.151.9
+
+[301, '10.', '127.0.0.1', '192.168.', '1; mode=block', '::1', 'DENY', 'ENVIRONMENT', 'FORCE_HTTPS', 'Permissions-Policy', 'Referrer-Policy', 'SUPABASE_SERVICE_KEY', 'SUPABASE_URL', 'User-Agent', 'X-Frame-Options', 'X-XSS-Protection', 'development', 'eventsPerSecond', 'false', 'headers', 'https', 'https://', 'key', 'localhost', 'nosniff', 'options', 'params', 'production', 'public', 'realtime', 'schema', 'true', 'url', 'x-forwarded-proto']

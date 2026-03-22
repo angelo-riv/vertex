@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import DemoModeControls from '../components/demo/DemoModeControls';
 
 const SettingsPage = () => {
-  const { state, actions } = useApp();
+  const { actions } = useApp();
   const [feedbackMode, setFeedbackMode] = useState('both');
   const [alertThreshold, setAlertThreshold] = useState(8);
   const [privacySettings, setPrivacySettings] = useState('healthcare_provider');
@@ -77,6 +78,9 @@ const SettingsPage = () => {
           Configure your Vertex rehabilitation device and customize your therapy experience.
         </p>
       </div>
+
+      {/* Demo Mode Controls - For Presentations */}
+      <DemoModeControls />
 
       {/* Main Settings Grid */}
       <div style={{

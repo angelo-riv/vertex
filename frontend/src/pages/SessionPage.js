@@ -1,32 +1,135 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import PostureVisualization from '../components/monitoring/PostureVisualization';
 import CircularTiltMeter from '../components/monitoring/CircularTiltMeter';
 import SensorDataDisplay from '../components/monitoring/SensorDataDisplay';
 import AlertMessage from '../components/monitoring/AlertMessage';
+import { useApp } from '../context/AppContext';
+import useWebSocket from '../hooks/useWebSocket';
 
 const SessionPage = () => {
+  const { state, actions } = useApp();
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [sessionDuration, setSessionDuration] = useState(0);
   const [alertVisible, setAlertVisible] = useState(false);
 
-  // Mock sensor data (in real app, this would come from API)
-  const mockSensorData = {
-    imu: { pitch: 0.5, roll: -1.2, yaw: 0.8 },
-    fsr: { left: 245, right: 267 },
-    isConnected: false,
-    hapticActive: false,
-    alertLevel: 'safe'
+  // Initialize WebSocket connection for real-time updates
+  const {
+    isConnected: wsConnected,
+    connectionStatus,
+    connect: connectWebSocket,
+    disconnect: disconnectWebSocket
+  } = useWebSocket({
+    autoConnect: true,
+    onSensorData: (data) => {
+      // Real-time sensor data updates handled by WebSocketProvider
+      console.log('SessionPage: Received sensor data', data);
+    },
+    onError: (error) => {
+      console.error('SessionPage: WebSocket error', error);
+      setAlertVisible(true);
+    }
+  });
+
+  // Extract real-time data from AppContext (updated by WebSocket)
+  const {
+    monitoring: { livePosture, alertLevel },
+    esp32: { isConnected: esp32Connected, deviceId, connectionQuality, demoMode },
+    clinical: { pusherDetected, clinicalScore, thresholds },
+    calibration: { status: calibrationStatus, baseline, progress, lastCalibrationDate }
+  } = state;
+
+  // Session timer effect
+  useEffect(() => {
+    let interval = null;
+    if (isSessionActive) {
+      interval = setInterval(() => {
+        setSessionDuration(duration => duration + 1);
+      }, 1000);
+    } else if (!isSessionActive && sessionDuration !== 0) {
+      clearInterval(interval);
+    }
+    return () => clearInterval(interval);
+  }, [isSessionActive, sessionDuration]);
+
+  // Auto-show alerts for pusher detection
+  useEffect(() => {
+    if (pusherDetected && !alertVisible) {
+      setAlertVisible(true);
+    }
+  }, [pusherDetected, alertVisible]);
+
+  // Real-time sensor data (from WebSocket updates via AppContext)
+  const realTimeSensorData = {
+    imu: { 
+      pitch: livePosture.tiltAngle || 0, 
+      roll: 0, // Roll not currently used in posture monitoring
+      yaw: 0   // Yaw not currently used in posture monitoring
+    },
+    fsr: { 
+      left: livePosture.fsrLeft || 0, 
+      right: livePosture.fsrRight || 0 
+    },
+    isConnected: esp32Connected || wsConnected,
+    hapticActive: livePosture.hapticActive || false,
+    alertLevel: alertLevel || 'safe'
+  };
+
+  // ESP32 status for enhanced monitoring
+  const esp32Status = {
+    isConnected: esp32Connected,
+    deviceId: deviceId,
+    lastDataTimestamp: livePosture.timestamp,
+    connectionQuality: connectionQuality,
+    demoMode: demoMode
+  };
+
+  // Clinical data for enhanced analytics
+  const clinicalData = {
+    pusherDetected: pusherDetected,
+    currentEpisode: state.clinical.currentEpisode,
+    clinicalScore: clinicalScore,
+    confidence: 0.8, // TODO: Get from actual clinical analysis
+    episodeCount: state.clinical.episodeHistory.length
+  };
+
+  // Calibration status for device management
+  const calibrationData = {
+    status: calibrationStatus,
+    progress: progress,
+    baseline: baseline,
+    lastCalibrationDate: lastCalibrationDate
   };
 
   const handleStartSession = () => {
     setIsSessionActive(true);
-    // TODO: Implement actual session start logic
+    actions.startMonitoring(`session-${Date.now()}`);
+    
+    // Ensure WebSocket connection is active
+    if (!wsConnected) {
+      connectWebSocket();
+    }
   };
 
   const handleStopSession = () => {
     setIsSessionActive(false);
     setSessionDuration(0);
-    // TODO: Implement actual session stop logic
+    actions.stopMonitoring();
+  };
+
+  const handleStartCalibration = () => {
+    // TODO: Implement calibration start logic
+    console.log('Starting calibration...');
+    actions.updateCalibrationProgress(0);
+  };
+
+  const handleToggleDemoMode = () => {
+    const newDemoMode = !demoMode;
+    actions.setESP32DemoMode(newDemoMode);
+    if (newDemoMode) {
+      actions.startDemoMode('demo-device', 'normal_posture');
+    } else {
+      actions.stopDemoMode();
+    }
   };
 
   const formatTime = (seconds) => {
@@ -112,9 +215,9 @@ const SessionPage = () => {
       {alertVisible && (
         <div style={{ marginBottom: 'var(--spacing-4)' }}>
           <AlertMessage
-            alertLevel="warning"
-            tiltAngle={5.2}
-            direction="left"
+            alertLevel={pusherDetected ? "warning" : alertLevel}
+            tiltAngle={livePosture.tiltAngle}
+            direction={livePosture.tiltDirection}
             onDismiss={() => setAlertVisible(false)}
             autoHide={true}
           />
@@ -165,9 +268,12 @@ const SessionPage = () => {
           }}>
             <div style={{ textAlign: 'center' }}>
               <PostureVisualization 
-                postureState="upright" 
-                tiltAngle={0}
+                tiltAngle={realTimeSensorData.imu.pitch}
                 size={140}
+                clinicalThresholds={thresholds}
+                calibrationBaseline={baseline?.pitch || 0}
+                pusherDetected={pusherDetected}
+                connectionStatus={esp32Connected ? 'connected' : 'disconnected'}
               />
               <p style={{
                 fontSize: 'var(--font-size-base)',
@@ -182,7 +288,10 @@ const SessionPage = () => {
                 color: 'var(--gray-400)',
                 margin: 'var(--spacing-1) 0 0 0'
               }}>
-                {isSessionActive ? 'Posture: Upright' : 'Start session to begin monitoring'}
+                {isSessionActive ? 
+                  `Posture: ${livePosture.tiltDirection === 'center' ? 'Upright' : 
+                    livePosture.tiltDirection === 'left_lean' ? 'Leaning Left' : 'Leaning Right'}` : 
+                  'Start session to begin monitoring'}
               </p>
             </div>
           </div>
@@ -220,9 +329,12 @@ const SessionPage = () => {
             minHeight: '200px'
           }}>
             <CircularTiltMeter 
-              tiltAngle={0}
-              direction="center"
+              tiltAngle={realTimeSensorData.imu.pitch}
+              direction={livePosture.tiltDirection}
               size={160}
+              clinicalThresholds={thresholds}
+              calibratedBaseline={baseline?.pitch || 0}
+              showClinicalMarkers={true}
             />
           </div>
 
@@ -236,10 +348,13 @@ const SessionPage = () => {
             <div style={{
               fontSize: 'var(--font-size-xl)',
               fontWeight: '700',
-              color: 'var(--success-green)',
+              color: pusherDetected ? '#dc2626' : 
+                     Math.abs(realTimeSensorData.imu.pitch) >= thresholds.severe ? '#dc2626' :
+                     Math.abs(realTimeSensorData.imu.pitch) >= thresholds.normal ? '#f59e0b' : 
+                     'var(--success-green)',
               marginBottom: 'var(--spacing-1)'
             }}>
-              0.0°
+              {Math.abs(realTimeSensorData.imu.pitch).toFixed(1)}°
             </div>
             <div style={{
               fontSize: 'var(--font-size-sm)',
@@ -248,6 +363,16 @@ const SessionPage = () => {
             }}>
               Current Tilt Angle
             </div>
+            {pusherDetected && (
+              <div style={{
+                fontSize: 'var(--font-size-xs)',
+                color: '#dc2626',
+                fontWeight: '600',
+                marginTop: 'var(--spacing-1)'
+              }}>
+                ⚠️ Pusher Syndrome Detected
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -279,10 +404,15 @@ const SessionPage = () => {
         </h3>
         
         <SensorDataDisplay
-          imuData={mockSensorData.imu}
-          fsrData={mockSensorData.fsr}
-          hapticActive={mockSensorData.hapticActive}
-          isConnected={mockSensorData.isConnected}
+          imuData={realTimeSensorData.imu}
+          fsrData={realTimeSensorData.fsr}
+          hapticActive={realTimeSensorData.hapticActive}
+          isConnected={realTimeSensorData.isConnected}
+          esp32Status={esp32Status}
+          clinicalData={clinicalData}
+          calibrationStatus={calibrationData}
+          onStartCalibration={handleStartCalibration}
+          onToggleDemoMode={handleToggleDemoMode}
         />
       </div>
 
@@ -319,24 +449,24 @@ const SessionPage = () => {
             <div style={{
               textAlign: 'center',
               padding: 'var(--spacing-4)',
-              backgroundColor: 'var(--success-green)'.replace('var(--success-green)', '#F0FDF4'),
+              backgroundColor: Math.abs(livePosture.tiltAngle) <= thresholds.normal ? '#F0FDF4' : '#FEF2F2',
               borderRadius: 'var(--radius-md)',
-              border: '1px solid #BBF7D0'
+              border: `1px solid ${Math.abs(livePosture.tiltAngle) <= thresholds.normal ? '#BBF7D0' : '#FECACA'}`
             }}>
               <div style={{
                 fontSize: '1.75rem',
                 fontWeight: '700',
-                color: 'var(--success-green)',
+                color: Math.abs(livePosture.tiltAngle) <= thresholds.normal ? 'var(--success-green)' : '#dc2626',
                 marginBottom: 'var(--spacing-1)'
               }}>
-                100%
+                {Math.abs(livePosture.tiltAngle) <= thresholds.normal ? '✓' : '⚠️'}
               </div>
               <div style={{
                 fontSize: 'var(--font-size-sm)',
                 color: 'var(--gray-600)',
                 fontWeight: '500'
               }}>
-                Upright Time
+                Current Posture
               </div>
             </div>
 
@@ -353,38 +483,62 @@ const SessionPage = () => {
                 color: 'var(--primary-blue)',
                 marginBottom: 'var(--spacing-1)'
               }}>
-                0
+                {clinicalData.episodeCount}
               </div>
               <div style={{
                 fontSize: 'var(--font-size-sm)',
                 color: 'var(--gray-600)',
                 fontWeight: '500'
               }}>
-                Corrections
+                Episodes Today
               </div>
             </div>
 
             <div style={{
               textAlign: 'center',
               padding: 'var(--spacing-4)',
-              backgroundColor: '#FEF3C7',
+              backgroundColor: pusherDetected ? '#FEF2F2' : '#FEF3C7',
               borderRadius: 'var(--radius-md)',
-              border: '1px solid #FDE68A'
+              border: `1px solid ${pusherDetected ? '#FECACA' : '#FDE68A'}`
             }}>
               <div style={{
                 fontSize: '1.75rem',
                 fontWeight: '700',
-                color: 'var(--warning-orange)',
+                color: pusherDetected ? '#dc2626' : 'var(--warning-orange)',
                 marginBottom: 'var(--spacing-1)'
               }}>
-                0.0°
+                {clinicalData.clinicalScore}
               </div>
               <div style={{
                 fontSize: 'var(--font-size-sm)',
                 color: 'var(--gray-600)',
                 fontWeight: '500'
               }}>
-                Average Tilt
+                Clinical Score
+              </div>
+            </div>
+
+            <div style={{
+              textAlign: 'center',
+              padding: 'var(--spacing-4)',
+              backgroundColor: esp32Connected ? '#F0FDF4' : '#FEF2F2',
+              borderRadius: 'var(--radius-md)',
+              border: `1px solid ${esp32Connected ? '#BBF7D0' : '#FECACA'}`
+            }}>
+              <div style={{
+                fontSize: '1.75rem',
+                fontWeight: '700',
+                color: esp32Connected ? 'var(--success-green)' : '#dc2626',
+                marginBottom: 'var(--spacing-1)'
+              }}>
+                {esp32Connected ? '●' : '○'}
+              </div>
+              <div style={{
+                fontSize: 'var(--font-size-sm)',
+                color: 'var(--gray-600)',
+                fontWeight: '500'
+              }}>
+                Device Status
               </div>
             </div>
           </div>

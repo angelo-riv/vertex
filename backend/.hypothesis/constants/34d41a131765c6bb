@@ -1,0 +1,4 @@
+# file: C:\Users\angel\Documents\Programming\projects\vertex\backend\security\auth_middleware.py
+# hypothesis_version: 6.151.9
+
+[300, 401, 403, 429, 1000, '/', '/api/demo/scenarios', '/api/demo/status', '/api/health', '/api/sensor-data', '/docs', '/openapi.json', 'Authorization', 'Bearer ', 'DEVICE_SECRET', 'ESP32_', 'HS256', 'JWT_SECRET', 'SUPABASE_JWT_SECRET', 'X-Device-ID', 'X-Device-Signature', 'X-Timestamp', 'admin', 'authenticated', 'authenticated_device', 'authenticated_user', 'device-secret-key', 'device_id', 'email', 'role', 'sub', 'therapist', 'unknown', 'user_email', 'user_id', 'user_role', 'verify_exp']

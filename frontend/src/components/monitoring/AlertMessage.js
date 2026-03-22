@@ -1,13 +1,32 @@
 import React from 'react';
 
 const AlertMessage = ({ 
-  alertLevel = 'safe', // 'safe', 'warning', 'unsafe'
+  alertLevel = 'safe', // 'safe', 'warning', 'unsafe', 'esp32_connection', 'esp32_disconnection', 'pusher_detected', 'calibration_reminder', 'threshold_breach'
   message = '',
   tiltAngle = 0,
   direction = 'center',
   onDismiss = null,
   autoHide = false,
-  duration = 5000
+  duration = 5000,
+  // ESP32 Integration props
+  esp32Status = {
+    isConnected: false,
+    deviceId: null,
+    connectionQuality: 'unknown',
+    demoMode: false
+  },
+  // Clinical Analytics props
+  clinicalData = {
+    pusherDetected: false,
+    clinicalScore: 0,
+    confidence: 0,
+    episodeCount: 0
+  },
+  // Calibration props
+  calibrationStatus = {
+    status: 'not_calibrated',
+    lastCalibrationDate: null
+  }
 }) => {
   // Auto-hide functionality
   React.useEffect(() => {
@@ -44,6 +63,46 @@ const AlertMessage = ({
           iconColor: '#f59e0b',
           icon: '⚠'
         };
+      case 'esp32_connection':
+        return {
+          backgroundColor: '#f0fdf4',
+          borderColor: '#bbf7d0',
+          textColor: '#166534',
+          iconColor: '#10b981',
+          icon: '📡'
+        };
+      case 'esp32_disconnection':
+        return {
+          backgroundColor: '#fef2f2',
+          borderColor: '#fecaca',
+          textColor: '#dc2626',
+          iconColor: '#ef4444',
+          icon: '📡'
+        };
+      case 'pusher_detected':
+        return {
+          backgroundColor: '#fef2f2',
+          borderColor: '#fecaca',
+          textColor: '#dc2626',
+          iconColor: '#dc2626',
+          icon: '🚨'
+        };
+      case 'calibration_reminder':
+        return {
+          backgroundColor: '#fffbeb',
+          borderColor: '#fed7aa',
+          textColor: '#c2410c',
+          iconColor: '#f97316',
+          icon: '⚙️'
+        };
+      case 'threshold_breach':
+        return {
+          backgroundColor: '#fef3c7',
+          borderColor: '#fcd34d',
+          textColor: '#92400e',
+          iconColor: '#f59e0b',
+          icon: '📊'
+        };
       case 'safe':
       default:
         return {
@@ -67,10 +126,43 @@ const AlertMessage = ({
         return `Unsafe posture detected! Tilt angle: ${tiltAngle.toFixed(1)}° ${direction}. Please adjust your position.`;
       case 'warning':
         return `Posture warning: Tilt angle: ${tiltAngle.toFixed(1)}° ${direction}. Consider adjusting your position.`;
+      case 'esp32_connection':
+        return `ESP32 device connected successfully. Device ID: ${esp32Status.deviceId || 'Unknown'}. Connection quality: ${esp32Status.connectionQuality}.`;
+      case 'esp32_disconnection':
+        return `ESP32 device disconnected. Last seen: ${esp32Status.lastDataTimestamp ? new Date(esp32Status.lastDataTimestamp).toLocaleTimeString() : 'Unknown'}. Check device power and WiFi connection.`;
+      case 'pusher_detected':
+        return `Pusher syndrome episode detected! Severity: ${getClinicalSeverityLabel(clinicalData.clinicalScore)}. Confidence: ${(clinicalData.confidence * 100).toFixed(0)}%. Please assist patient with posture correction.`;
+      case 'calibration_reminder':
+        return `Device calibration ${calibrationStatus.lastCalibrationDate ? 'is outdated' : 'required'}. ${calibrationStatus.lastCalibrationDate ? `Last calibrated: ${formatCalibrationDate(calibrationStatus.lastCalibrationDate)}.` : ''} Please perform calibration for accurate detection.`;
+      case 'threshold_breach':
+        return `Clinical threshold exceeded. Current tilt: ${tiltAngle.toFixed(1)}°. Patient may require immediate attention and posture assistance.`;
       case 'safe':
       default:
         return 'Posture is within safe range. Good job maintaining proper alignment!';
     }
+  };
+
+  // Helper functions for ESP32 alert messages
+  const getClinicalSeverityLabel = (score) => {
+    switch (score) {
+      case 0: return 'No Pushing';
+      case 1: return 'Mild';
+      case 2: return 'Moderate';
+      case 3: return 'Severe';
+      default: return 'Unknown';
+    }
+  };
+
+  const formatCalibrationDate = (date) => {
+    if (!date) return 'Never';
+    const calibrationDate = new Date(date);
+    const now = new Date();
+    const diffDays = Math.floor((now - calibrationDate) / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    return calibrationDate.toLocaleDateString();
   };
 
   const displayMessage = getDefaultMessage();
@@ -79,12 +171,40 @@ const AlertMessage = ({
   const getAriaLive = () => {
     switch (alertLevel) {
       case 'unsafe':
+      case 'pusher_detected':
+      case 'threshold_breach':
         return 'assertive';
       case 'warning':
+      case 'esp32_disconnection':
+      case 'calibration_reminder':
         return 'polite';
       case 'safe':
+      case 'esp32_connection':
       default:
         return 'polite';
+    }
+  };
+
+  // Get alert title based on level
+  const getAlertTitle = () => {
+    switch (alertLevel) {
+      case 'unsafe':
+        return 'Unsafe Posture';
+      case 'warning':
+        return 'Posture Warning';
+      case 'esp32_connection':
+        return 'Device Connected';
+      case 'esp32_disconnection':
+        return 'Device Disconnected';
+      case 'pusher_detected':
+        return 'Pusher Syndrome Alert';
+      case 'calibration_reminder':
+        return 'Calibration Required';
+      case 'threshold_breach':
+        return 'Clinical Threshold Exceeded';
+      case 'safe':
+      default:
+        return 'Good Posture';
     }
   };
 
@@ -136,9 +256,7 @@ const AlertMessage = ({
           marginBottom: 'var(--spacing-1)',
           lineHeight: '1.4'
         }}>
-          {alertLevel === 'unsafe' ? 'Unsafe Posture' : 
-           alertLevel === 'warning' ? 'Posture Warning' : 
-           'Good Posture'}
+          {getAlertTitle()}
         </div>
         
         <div style={{
@@ -162,6 +280,51 @@ const AlertMessage = ({
             fontWeight: '500'
           }}>
             Recommended: Slowly adjust your position to reduce tilt angle below 8°
+          </div>
+        )}
+
+        {/* ESP32 connection details */}
+        {alertLevel === 'esp32_connection' && esp32Status.demoMode && (
+          <div style={{
+            marginTop: 'var(--spacing-2)',
+            padding: 'var(--spacing-2)',
+            backgroundColor: 'rgba(255, 255, 255, 0.5)',
+            borderRadius: 'var(--border-radius-sm)',
+            fontSize: 'var(--font-size-xs)',
+            color: styles.textColor,
+            fontWeight: '500'
+          }}>
+            Note: Demo mode is active. Switch to live hardware for real patient monitoring.
+          </div>
+        )}
+
+        {/* Pusher syndrome episode details */}
+        {alertLevel === 'pusher_detected' && (
+          <div style={{
+            marginTop: 'var(--spacing-2)',
+            padding: 'var(--spacing-2)',
+            backgroundColor: 'rgba(255, 255, 255, 0.5)',
+            borderRadius: 'var(--border-radius-sm)',
+            fontSize: 'var(--font-size-xs)',
+            color: styles.textColor,
+            fontWeight: '500'
+          }}>
+            Episode #{clinicalData.episodeCount} today. Provide gentle guidance and support for posture correction.
+          </div>
+        )}
+
+        {/* Calibration reminder details */}
+        {alertLevel === 'calibration_reminder' && (
+          <div style={{
+            marginTop: 'var(--spacing-2)',
+            padding: 'var(--spacing-2)',
+            backgroundColor: 'rgba(255, 255, 255, 0.5)',
+            borderRadius: 'var(--border-radius-sm)',
+            fontSize: 'var(--font-size-xs)',
+            color: styles.textColor,
+            fontWeight: '500'
+          }}>
+            Calibration improves detection accuracy. Press the calibration button on the device or use the app controls.
           </div>
         )}
       </div>

@@ -1,0 +1,4 @@
+# file: C:\Users\angel\Documents\Programming\projects\vertex\backend\models\calibration_models.py
+# hypothesis_version: 6.151.9
+
+[0.08, 0.15, 0.2, 0.3, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.5, 2.0, 2.5, 3.0, 5.0, 10.0, 20.0, 100, 500, 1000, 4095, 'Patient UUID', 'backward', 'balance_stability', 'balanced', 'baseline_fsr_left', 'baseline_fsr_right', 'calibrated', 'calibrating', 'expired', 'forward', 'fsr_stability', 'left', 'mild', 'moderate', 'normal', 'normal_threshold', 'not_calibrated', 'pending', 'pitch_stability', 'pusher_threshold', 'right', 'severe', 'severe_threshold', 'upright']

@@ -1,5 +1,7 @@
 import React from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import DemoModeIndicator from '../demo/DemoModeIndicator';
+import WebSocketStatus from '../monitoring/WebSocketStatus';
 
 const MainLayout = () => {
   const location = useLocation();
@@ -78,6 +80,9 @@ const MainLayout = () => {
       minHeight: '100vh',
       backgroundColor: 'var(--gray-50)'
     }}>
+      {/* Demo Mode Indicator - Always visible when active */}
+      <DemoModeIndicator />
+      
       {/* Header */}
       <header style={{
         backgroundColor: 'white',
@@ -102,33 +107,42 @@ const MainLayout = () => {
             Vertex
           </h1>
           
-          <button
-            onClick={() => {
-              // Clear demo data and redirect to landing
-              localStorage.removeItem('currentUserEmail');
-              localStorage.removeItem('onboardingComplete');
-              localStorage.removeItem('userEmail');
-              navigate('/auth/');
-            }}
-            style={{
-              backgroundColor: 'transparent',
-              border: '1px solid var(--gray-300)',
-              borderRadius: 'var(--radius-md)',
-              padding: 'var(--spacing-2) var(--spacing-3)',
-              fontSize: 'var(--font-size-sm)',
-              color: 'var(--gray-600)',
-              cursor: 'pointer',
-              transition: 'var(--transition-fast)'
-            }}
-            onMouseOver={(e) => {
-              e.target.style.backgroundColor = 'var(--gray-100)';
-            }}
-            onMouseOut={(e) => {
-              e.target.style.backgroundColor = 'transparent';
-            }}
-          >
-            Logout
-          </button>
+          {/* WebSocket Status and Logout */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 'var(--spacing-3)'
+          }}>
+            <WebSocketStatus size="small" />
+            
+            <button
+              onClick={() => {
+                // Clear demo data and redirect to landing
+                localStorage.removeItem('currentUserEmail');
+                localStorage.removeItem('onboardingComplete');
+                localStorage.removeItem('userEmail');
+                navigate('/auth/');
+              }}
+              style={{
+                backgroundColor: 'transparent',
+                border: '1px solid var(--gray-300)',
+                borderRadius: 'var(--radius-md)',
+                padding: 'var(--spacing-2) var(--spacing-3)',
+                fontSize: 'var(--font-size-sm)',
+                color: 'var(--gray-600)',
+                cursor: 'pointer',
+                transition: 'var(--transition-fast)'
+              }}
+              onMouseOver={(e) => {
+                e.target.style.backgroundColor = 'var(--gray-100)';
+              }}
+              onMouseOut={(e) => {
+                e.target.style.backgroundColor = 'transparent';
+              }}
+            >
+              Logout
+            </button>
+          </div>
         </div>
       </header>
 

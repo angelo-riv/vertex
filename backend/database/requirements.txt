@@ -1,0 +1,19 @@
+# Database Migration Requirements
+# Required packages for running migration and validation scripts
+
+# PostgreSQL adapter for Python
+psycopg2-binary==2.9.9
+
+# Alternative PostgreSQL adapter (if psycopg2 has issues)
+# psycopg2==2.9.9
+
+# Environment variable management
+python-dotenv==1.0.0
+
+# Logging and utilities (usually included in Python standard library)
+# argparse - included in Python 3.2+
+# logging - included in Python standard library
+# hashlib - included in Python standard library
+# datetime - included in Python standard library
+# pathlib - included in Python 3.4+
+# typing - included in Python 3.5+
