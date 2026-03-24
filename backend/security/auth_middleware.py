@@ -35,14 +35,15 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
             "/openapi.json",
             "/api/health",
             "/api/demo/status",
-            "/api/demo/scenarios"
+            "/api/demo/scenarios",
+            "/api/sensor-data",
+            "/api/sensor-data/test",
+            "/ws/sensor-stream",
+            "/api/websocket/stats"
         }
         
         # ESP32 device endpoints (use device authentication)
-        self.device_endpoints = {
-            "/api/sensor-data",
-            "/api/sensor-data/test"
-        }
+        self.device_endpoints = set()  # Moved to public for development
         
     async def dispatch(self, request: Request, call_next):
         # Skip authentication for public endpoints
@@ -221,7 +222,7 @@ def require_therapist_role():
     Dependency to require therapist role for clinical threshold configuration.
     Therapists and admins can configure patient-specific thresholds.
     """
-    def therapist_role_checker(request: Request):
+    def therapist_role_checker(request: Request) -> Dict[str, Any]:
         user = get_current_user(request)
         if not user:
             raise HTTPException(status_code=401, detail="Authentication required")
@@ -242,7 +243,7 @@ def require_clinical_access():
     Dependency to require clinical access for ESP32 device management and clinical analytics.
     Therapists, clinicians, and admins can access clinical features.
     """
-    def clinical_access_checker(request: Request):
+    def clinical_access_checker(request: Request) -> Dict[str, Any]:
         user = get_current_user(request)
         if not user:
             raise HTTPException(status_code=401, detail="Authentication required")
@@ -256,6 +257,7 @@ def require_clinical_access():
             
         return user
     
+    return clinical_access_checker
 def require_patient_access(patient_id: str):
     """
     Dependency to ensure user can only access their own patient data.

@@ -199,6 +199,9 @@ performance_monitor = PerformanceMonitor()
 
 def track_performance(func):
     """Decorator to track function performance"""
+    import functools
+
+    @functools.wraps(func)
     async def async_wrapper(*args, **kwargs):
         start_time = time.time()
         performance_monitor.record_request()
@@ -213,6 +216,7 @@ def track_performance(func):
             performance_monitor.record_processing_time(processing_time)
             raise e
     
+    @functools.wraps(func)
     def sync_wrapper(*args, **kwargs):
         start_time = time.time()
         performance_monitor.record_request()

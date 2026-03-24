@@ -4,7 +4,6 @@ import CircularTiltMeter from '../components/monitoring/CircularTiltMeter';
 import SensorDataDisplay from '../components/monitoring/SensorDataDisplay';
 import AlertMessage from '../components/monitoring/AlertMessage';
 import { useApp } from '../context/AppContext';
-import useWebSocket from '../hooks/useWebSocket';
 
 const SessionPage = () => {
   const { state, actions } = useApp();
@@ -12,23 +11,8 @@ const SessionPage = () => {
   const [sessionDuration, setSessionDuration] = useState(0);
   const [alertVisible, setAlertVisible] = useState(false);
 
-  // Initialize WebSocket connection for real-time updates
-  const {
-    isConnected: wsConnected,
-    connectionStatus,
-    connect: connectWebSocket,
-    disconnect: disconnectWebSocket
-  } = useWebSocket({
-    autoConnect: true,
-    onSensorData: (data) => {
-      // Real-time sensor data updates handled by WebSocketProvider
-      console.log('SessionPage: Received sensor data', data);
-    },
-    onError: (error) => {
-      console.error('SessionPage: WebSocket error', error);
-      setAlertVisible(true);
-    }
-  });
+  // Read connection status from AppContext (managed by WebSocketProvider)
+  const wsConnected = state.esp32.isConnected;
 
   // Extract real-time data from AppContext (updated by WebSocket)
   const {
@@ -103,11 +87,6 @@ const SessionPage = () => {
   const handleStartSession = () => {
     setIsSessionActive(true);
     actions.startMonitoring(`session-${Date.now()}`);
-    
-    // Ensure WebSocket connection is active
-    if (!wsConnected) {
-      connectWebSocket();
-    }
   };
 
   const handleStopSession = () => {

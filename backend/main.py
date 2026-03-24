@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Depends, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, EmailStr, Field
 import asyncio
 import logging
 import os
@@ -54,7 +54,7 @@ app = FastAPI(title="Vertex Rehabilitation API", version="1.0.0")
 # Security middleware - order matters!
 app.add_middleware(HTTPSRedirectMiddleware, force_https=os.getenv("FORCE_HTTPS", "false").lower() == "true")
 app.add_middleware(SecurityHeadersMiddleware)
-app.add_middleware(RateLimitingMiddleware, requests_per_minute=120)  # Increased for medical device needs
+app.add_middleware(RateLimitingMiddleware, requests_per_minute=600)  # ESP32 posts ~7/sec = 420/min
 app.add_middleware(AuthenticationMiddleware)
 
 # Supabase configuration with HTTPS enforcement
@@ -69,7 +69,7 @@ except Exception as e:
 # CORS middleware (after security middleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],  # React dev servers
+    allow_origins=["http://localhost:5173", "http://localhost:3000", "http://192.168.1.110:3000", "*"],  # React dev servers
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -170,25 +170,26 @@ class PatientProfile(BaseModel):
 
 class ESP32SensorData(BaseModel):
     """ESP32 sensor data model with validation for expected ranges"""
-    deviceId: str = Field(..., min_length=1, max_length=50, description="ESP32 device identifier")
-    timestamp: int = Field(..., gt=0, description="Unix timestamp in milliseconds")
-    pitch: float = Field(..., ge=-180.0, le=180.0, description="Pitch angle in degrees (-180 to +180)")
-    fsrLeft: int = Field(..., ge=0, le=4095, description="Left FSR sensor value (0-4095)")
-    fsrRight: int = Field(..., ge=0, le=4095, description="Right FSR sensor value (0-4095)")
-    
-    @validator('deviceId')
-    def validate_device_id(cls, v):
-        if not v.startswith('ESP32_'):
-            raise ValueError('Device ID must start with ESP32_')
-        return v
-    
-    @validator('timestamp')
-    def validate_timestamp(cls, v):
-        # Ensure timestamp is reasonable (not too far in past or future)
-        now = datetime.now(timezone.utc).timestamp() * 1000
-        if abs(v - now) > 86400000:  # 24 hours in milliseconds
-            raise ValueError('Timestamp must be within 24 hours of current time')
-        return v
+    device_id: str = Field(..., min_length=1, max_length=50, description="ESP32 device identifier")
+    timestamp: int = Field(..., ge=0, description="Milliseconds timestamp (millis() from ESP32 or Unix ms)")
+    roll: float = Field(..., ge=-180.0, le=180.0, description="Roll angle in degrees (-180 to +180)")
+    fsr_left: int = Field(..., ge=0, le=4095, description="Left FSR sensor value (0-4095)")
+    fsr_right: int = Field(..., ge=0, le=4095, description="Right FSR sensor value (0-4095)")
+    pusher_detected: Optional[bool] = None
+    confidence_level: Optional[float] = None
+    session_id: Optional[str] = None
+
+    model_config = {"populate_by_name": True}
+
+    # Convenience properties for code that still uses camelCase
+    @property
+    def deviceId(self): return self.device_id
+    @property
+    def fsrLeft(self): return self.fsr_left
+    @property
+    def fsrRight(self): return self.fsr_right
+    @property
+    def pitch(self): return self.roll
 
 class DeviceConnectionStatus(BaseModel):
     """Enhanced device connection tracking model with comprehensive diagnostics"""
@@ -395,11 +396,11 @@ async def _background_database_storage(sensor_data: ESP32SensorData, sensor_time
         sensor_record = {
             "device_id": device_id,
             "timestamp": sensor_timestamp.isoformat(),
-            "imu_pitch": sensor_data.pitch,
-            "imu_roll": 0.0,
+            "imu_pitch": 0.0,
+            "imu_roll": sensor_data.roll,
             "imu_yaw": 0.0,
-            "fsr_left": float(sensor_data.fsrLeft),
-            "fsr_right": float(sensor_data.fsrRight)
+            "fsr_left": float(sensor_data.fsr_left),
+            "fsr_right": float(sensor_data.fsr_right)
         }
         
         # Store in buffer for batch processing
@@ -415,28 +416,44 @@ async def _background_database_storage(sensor_data: ESP32SensorData, sensor_time
     except Exception as e:
         logger.warning(f"Background storage error: {str(e)}")
 
+_db_backoff_until = 0  # Timestamp until which DB inserts are suppressed after repeated failures
+_db_consecutive_failures = 0
+
 async def _batch_database_insert():
     """
     Batch insert sensor data to reduce database load.
+    Backs off exponentially on repeated failures to avoid log spam.
     """
+    global _db_backoff_until, _db_consecutive_failures
+
     if not sensor_data_buffer:
         return
-        
+
+    # Skip if in backoff period
+    import time as _time
+    if _time.time() < _db_backoff_until:
+        sensor_data_buffer.clear()  # Drop records during backoff to prevent memory growth
+        return
+
     try:
-        # Get all records from buffer
         records = list(sensor_data_buffer)
         sensor_data_buffer.clear()
-        
-        # Batch insert
+
         result = supabase.table("sensor_readings").insert(records).execute()
-        
+
         if result.data:
             logger.debug(f"Batch inserted {len(records)} sensor records")
+            _db_consecutive_failures = 0  # Reset on success
         else:
-            logger.warning(f"Batch insert failed - no data returned")
-            
+            logger.warning("Batch insert failed - no data returned")
+
     except Exception as e:
-        logger.warning(f"Batch database insert failed: {str(e)}")
+        _db_consecutive_failures += 1
+        # Exponential backoff: 30s, 60s, 120s, max 300s
+        backoff = min(30 * (2 ** (_db_consecutive_failures - 1)), 300)
+        _db_backoff_until = _time.time() + backoff
+        if _db_consecutive_failures <= 3:
+            logger.warning(f"DB insert failed (will retry in {backoff}s): {str(e)}")
 
 # Add optimized WebSocket broadcasting method to ConnectionManager
 async def broadcast_sensor_data_optimized(self, data: dict):
@@ -922,23 +939,6 @@ async def receive_esp32_sensor_data(sensor_data: ESP32SensorData, request: Reque
     start_time = time.time()
     
     try:
-        # Get authenticated device ID from security middleware
-        authenticated_device = get_current_device(request)
-        if not authenticated_device:
-            log_security_event("unauthorized_device_access", {
-                "device_id": sensor_data.deviceId,
-                "client_ip": request.client.host if request.client else "unknown"
-            })
-            raise HTTPException(status_code=401, detail="Device authentication required")
-        
-        # Verify device ID matches authenticated device
-        if authenticated_device != sensor_data.deviceId:
-            log_security_event("device_id_mismatch", {
-                "authenticated_device": authenticated_device,
-                "claimed_device": sensor_data.deviceId
-            })
-            raise HTTPException(status_code=403, detail="Device ID mismatch")
-        
         # Fast path: Update device connection status (optimized)
         device_status = update_device_connection(sensor_data.deviceId)
         

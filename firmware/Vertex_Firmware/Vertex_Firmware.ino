@@ -56,9 +56,9 @@ int16_t AcX, AcY, AcZ;
 int16_t GyX, GyY, GyZ;
 
 // --- WiFi / Backend Configuration ---
-const char* WIFI_SSID     = "YOUR_WIFI_SSID";
-const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
-const char* BACKEND_SERVER = "192.168.1.100";   // Your backend machine's local IP
+const char* WIFI_SSID     = "wifiname";
+const char* WIFI_PASSWORD = "wifipass";
+const char* BACKEND_SERVER = "typeipconfig in terminal for ip address ipv4";   // Your backend machine's local IP
 const int   BACKEND_PORT   = 8000;
 
 // --- Network State ---
@@ -577,7 +577,7 @@ bool postSensorData() {
 
   DynamicJsonDocument doc(512);
   doc["device_id"]       = deviceId;
-  doc["session_id"]      = sessionId.length() > 0 ? sessionId : nullptr;
+  if (sessionId.length() > 0) doc["session_id"] = sessionId;
   doc["timestamp"]       = millis();
   doc["roll"]            = round(roll * 10) / 10.0;
   doc["fsr_left"]        = fsrLeft;

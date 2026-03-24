@@ -8,9 +8,7 @@ from datetime import datetime, timezone
 import logging
 from security.auth_middleware import (
     require_therapist_role, 
-    require_clinical_access, 
-    require_patient_access,
-    get_current_user
+    require_clinical_access
 )
 
 logger = logging.getLogger(__name__)
@@ -20,7 +18,7 @@ router = APIRouter(prefix="/api/clinical", tags=["ESP32 Clinical Integration"])
 # Pydantic models for clinical threshold management
 class ClinicalThresholds(BaseModel):
     patient_id: str
-    paretic_side: str = Field(..., regex="^(left|right)$")
+    paretic_side: str = Field(..., pattern="^(left|right)$")
     normal_threshold: float = Field(default=5.0, ge=1.0, le=15.0)
     pusher_threshold: float = Field(default=10.0, ge=5.0, le=25.0)
     severe_threshold: float = Field(default=20.0, ge=10.0, le=45.0)
@@ -47,13 +45,13 @@ class ESP32AlertPreferences(BaseModel):
     pusher_alerts: bool = True
     calibration_reminders: bool = True
     threshold_alerts: bool = True
-    alert_volume: str = Field(default="medium", regex="^(low|medium|high|muted)$")
+    alert_volume: str = Field(default="medium", pattern="^(low|medium|high|muted)$")
 
 class ClinicalNotification(BaseModel):
-    notification_type: str = Field(..., regex="^(esp32_connection|esp32_disconnection|pusher_detected|calibration_reminder|threshold_breach)$")
+    notification_type: str = Field(..., pattern="^(esp32_connection|esp32_disconnection|pusher_detected|calibration_reminder|threshold_breach)$")
     patient_id: str
     message: str
-    severity: str = Field(default="info", regex="^(info|warning|error|success)$")
+    severity: str = Field(default="info", pattern="^(info|warning|error|success)$")
     metadata: Optional[Dict[str, Any]] = None
 
 # Clinical threshold management endpoints
@@ -61,7 +59,7 @@ class ClinicalNotification(BaseModel):
 async def create_clinical_thresholds(
     thresholds: ClinicalThresholds,
     request: Request,
-    user: dict = Depends(require_therapist_role())
+    user: Dict[str, Any] = Depends(require_therapist_role())
 ):
     """
     Create or update patient-specific clinical thresholds.
@@ -114,7 +112,7 @@ async def create_clinical_thresholds(
 async def get_clinical_thresholds(
     patient_id: str,
     request: Request,
-    user: dict = Depends(require_patient_access(patient_id))
+    user: Dict[str, Any] = Depends(require_clinical_access())
 ):
     """
     Get active clinical thresholds for a patient.
@@ -148,7 +146,7 @@ async def get_clinical_thresholds(
 @router.get("/thresholds", response_model=List[ThresholdResponse])
 async def list_clinical_thresholds(
     request: Request,
-    user: dict = Depends(require_clinical_access())
+    user: Dict[str, Any] = Depends(require_clinical_access())
 ):
     """
     List all clinical thresholds (for clinical staff only).
@@ -170,7 +168,7 @@ async def list_clinical_thresholds(
 async def set_esp32_alert_preferences(
     preferences: ESP32AlertPreferences,
     request: Request,
-    user: dict = Depends(require_patient_access(preferences.patient_id))
+    user: Dict[str, Any] = Depends(require_clinical_access())
 ):
     """
     Set ESP32 alert preferences for a patient.
@@ -196,7 +194,7 @@ async def set_esp32_alert_preferences(
 async def get_esp32_alert_preferences(
     patient_id: str,
     request: Request,
-    user: dict = Depends(require_patient_access(patient_id))
+    user: Dict[str, Any] = Depends(require_clinical_access())
 ):
     """
     Get ESP32 alert preferences for a patient.
@@ -226,7 +224,7 @@ async def get_esp32_alert_preferences(
 async def send_clinical_notification(
     notification: ClinicalNotification,
     request: Request,
-    user: dict = Depends(require_clinical_access())
+    user: Dict[str, Any] = Depends(require_clinical_access())
 ):
     """
     Send clinical notification for ESP32 events.
@@ -252,9 +250,9 @@ async def send_clinical_notification(
 @router.get("/notifications/{patient_id}")
 async def get_clinical_notifications(
     patient_id: str,
-    limit: int = 50,
     request: Request,
-    user: dict = Depends(require_patient_access(patient_id))
+    limit: int = 50,
+    user: Dict[str, Any] = Depends(require_clinical_access())
 ):
     """
     Get clinical notifications for a patient.
@@ -280,7 +278,7 @@ async def assign_esp32_device(
     device_id: str,
     patient_id: str,
     request: Request,
-    user: dict = Depends(require_therapist_role())
+    user: Dict[str, Any] = Depends(require_therapist_role())
 ):
     """
     Assign ESP32 device to a patient.
@@ -309,7 +307,7 @@ async def assign_esp32_device(
 async def unassign_esp32_device(
     device_id: str,
     request: Request,
-    user: dict = Depends(require_therapist_role())
+    user: Dict[str, Any] = Depends(require_therapist_role())
 ):
     """
     Unassign ESP32 device from patient.
@@ -336,7 +334,7 @@ async def unassign_esp32_device(
 @router.get("/devices")
 async def list_esp32_devices(
     request: Request,
-    user: dict = Depends(require_clinical_access())
+    user: Dict[str, Any] = Depends(require_clinical_access())
 ):
     """
     List all ESP32 devices and their assignments.

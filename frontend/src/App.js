@@ -16,43 +16,31 @@ import './App.css';
 function App() {
   return (
     <AppProvider>
-      <WebSocketProvider>
-        <Router>
+      <Router>
+        <WebSocketProvider>
           <div className="App">
             <Routes>
-              {/* Authentication Routes - should be first to catch /auth paths */}
+              {/* Authentication Routes */}
               <Route path="/auth/*" element={<AuthContainer />} />
               
-              {/* Root redirect - redirect to auth landing page */}
+              {/* Root redirect */}
               <Route path="/" element={<Navigate to="/auth/" replace />} />
               
-              {/* Main Application Routes - Simplified for demo */}
-              <Route path="/dashboard" element={<MainLayout />}>
-                <Route index element={<HomePage />} />
+              {/* Main Application Routes - single shared layout */}
+              <Route element={<MainLayout />}>
+                <Route path="/dashboard" element={<HomePage />} />
+                <Route path="/session" element={<SessionPage />} />
+                <Route path="/analytics" element={<AnalyticsPage />} />
+                <Route path="/support" element={<SupportPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
               </Route>
               
-              <Route path="/session" element={<MainLayout />}>
-                <Route index element={<SessionPage />} />
-              </Route>
-              
-              <Route path="/analytics" element={<MainLayout />}>
-                <Route index element={<AnalyticsPage />} />
-              </Route>
-              
-              <Route path="/support" element={<MainLayout />}>
-                <Route index element={<SupportPage />} />
-              </Route>
-              
-              <Route path="/settings" element={<MainLayout />}>
-                <Route index element={<SettingsPage />} />
-              </Route>
-              
-              {/* Fallback Route - redirect to landing page */}
+              {/* Fallback */}
               <Route path="*" element={<Navigate to="/auth/" replace />} />
             </Routes>
           </div>
-        </Router>
-      </WebSocketProvider>
+        </WebSocketProvider>
+      </Router>
     </AppProvider>
   );
 }

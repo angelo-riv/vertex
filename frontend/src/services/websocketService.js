@@ -1,258 +1,205 @@
 /**
- * WebSocket Service for Real-time ESP32 Sensor Data
- * 
- * Manages WebSocket connection to FastAPI backend for receiving real-time sensor data.
- * Implements automatic reconnection, connection status tracking, and message handling.
- * 
- * Requirements implemented:
- * - 4.1: Establish WebSocket connection to FastAPI backend on component mount
- * - 4.5: Implement automatic reconnection every 5 seconds on connection failure
- * - 7.1: Add connection status indicators (green for connected, red for disconnected)
+ * WebSocket Service — singleton that owns the connection lifecycle.
+ * Only WebSocketProvider should call connect/setEventListeners/cleanup.
+ *
+ * React 18 Strict Mode double-invokes effects in dev, so we handle the
+ * mount → unmount → remount cycle gracefully:
+ *   - cleanup() nulls listeners and sets a "dead" flag but does NOT close
+ *     the socket immediately (avoids the 1006 error on the first mount).
+ *   - connect() on the second mount reuses the existing socket if it is
+ *     already OPEN or CONNECTING.
  */
+
+const WS_URL = 'ws://192.168.1.110:8000/ws/sensor-stream';
 
 class WebSocketService {
   constructor() {
     this.ws = null;
-    this.reconnectInterval = null;
+    this.reconnectTimeout = null;
     this.reconnectAttempts = 0;
-    this.maxReconnectAttempts = Infinity; // Keep trying indefinitely
-    this.reconnectDelay = 5000; // 5 seconds
+    this.reconnectDelay = 5000;
     this.isConnecting = false;
     this.isManuallyDisconnected = false;
-    
-    // Event listeners
+    this._currentUrl = WS_URL;
+
     this.onConnectionChange = null;
     this.onSensorData = null;
     this.onDeviceStatus = null;
     this.onError = null;
-    
-    // Connection status
-    this.connectionStatus = 'disconnected'; // 'connecting', 'connected', 'disconnected', 'error'
+
+    this.connectionStatus = 'disconnected';
     this.lastConnectionTime = null;
     this.lastDataTime = null;
   }
 
-  /**
-   * Connect to WebSocket server with optimized connection handling
-   * @param {string} url - WebSocket URL (default: ws://localhost:8000/ws/sensor-stream)
-   */
-  connect(url = 'ws://localhost:8000/ws/sensor-stream') {
-    if (this.isConnecting || (this.ws && this.ws.readyState === WebSocket.CONNECTING)) {
+  connect(url = WS_URL) {
+    this._currentUrl = url;
+    this.isManuallyDisconnected = false;
+
+    // Already open — nothing to do
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      console.log('[WS] Already connected, skipping');
       return;
     }
 
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+    // Already connecting — nothing to do (second Strict Mode mount hits this)
+    if (this.ws && this.ws.readyState === WebSocket.CONNECTING) {
+      console.log('[WS] Already connecting, reusing socket');
+      // Re-attach handlers in case they were nulled by cleanup()
+      this._attachHandlers(this.ws, url);
       return;
     }
 
     this.isConnecting = true;
-    this.isManuallyDisconnected = false;
-    this.updateConnectionStatus('connecting');
+    this._updateStatus('connecting');
+    console.log(`[WS] Connecting to ${url}`);
 
-    try {
-      this.ws = new WebSocket(url);
+    const ws = new WebSocket(url);
+    this.ws = ws;
+    this._attachHandlers(ws, url);
+  }
 
-      this.ws.onopen = (event) => {
-        this.isConnecting = false;
-        this.reconnectAttempts = 0;
-        this.lastConnectionTime = new Date();
-        this.updateConnectionStatus('connected');
-        
-        // Clear reconnect interval
-        if (this.reconnectInterval) {
-          clearInterval(this.reconnectInterval);
-          this.reconnectInterval = null;
-        }
-
-        // Send minimal ping
-        this.sendMessage({ type: 'ping' });
-      };
-
-      this.ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          this.handleMessage(data);
-        } catch (error) {
-          console.error('WebSocket parse error:', error);
-        }
-      };
-
-      this.ws.onclose = (event) => {
-        this.isConnecting = false;
-        
-        if (!this.isManuallyDisconnected) {
-          this.updateConnectionStatus('disconnected');
-          this.scheduleReconnect();
-        }
-      };
-
-      this.ws.onerror = (error) => {
-        this.isConnecting = false;
-        this.updateConnectionStatus('error');
-        
-        if (this.onError) {
-          this.onError('WebSocket connection error');
-        }
-      };
-
-    } catch (error) {
+  _attachHandlers(ws, url) {
+    ws.onopen = () => {
+      if (this.ws !== ws) return; // stale socket
       this.isConnecting = false;
-      this.updateConnectionStatus('error');
-      this.scheduleReconnect();
-    }
+      this.reconnectAttempts = 0;
+      this.lastConnectionTime = new Date();
+      this._clearReconnect();
+      this._updateStatus('connected');
+      console.log('[WS] Connected successfully');
+      this.sendMessage({ type: 'ping' });
+    };
+
+    ws.onmessage = (event) => {
+      if (this.ws !== ws) return;
+      try {
+        this._handleMessage(JSON.parse(event.data));
+      } catch (e) {
+        console.error('[WS] Parse error:', e);
+      }
+    };
+
+    ws.onclose = (event) => {
+      if (this.ws !== ws) return;
+      this.isConnecting = false;
+      console.log(`[WS] Closed — code=${event.code} reason="${event.reason}" manual=${this.isManuallyDisconnected}`);
+      if (!this.isManuallyDisconnected) {
+        this._updateStatus('disconnected');
+        this._scheduleReconnect(url);
+      }
+    };
+
+    ws.onerror = () => {
+      if (this.ws !== ws) return;
+      this.isConnecting = false;
+      console.error('[WS] Connection error');
+      this._updateStatus('error');
+      if (this.onError) this.onError('WebSocket connection error');
+    };
   }
 
   /**
-   * Disconnect from WebSocket server
+   * Hard disconnect — used only when the app truly unmounts (not Strict Mode cleanup).
    */
   disconnect() {
-    console.log('Manually disconnecting WebSocket');
+    console.log('[WS] Manual disconnect');
     this.isManuallyDisconnected = true;
-    
-    // Clear reconnect interval
-    if (this.reconnectInterval) {
-      clearInterval(this.reconnectInterval);
-      this.reconnectInterval = null;
-    }
-
-    // Close WebSocket connection
+    this._clearReconnect();
     if (this.ws) {
       this.ws.close(1000, 'Manual disconnect');
       this.ws = null;
     }
-
-    this.updateConnectionStatus('disconnected');
+    this._updateStatus('disconnected');
   }
 
   /**
-   * Schedule automatic reconnection
+   * Soft cleanup — called by WebSocketProvider's useEffect cleanup.
+   * Nulls listeners so stale callbacks don't fire, but keeps the socket
+   * alive so the Strict Mode remount can reuse it.
    */
-  scheduleReconnect() {
-    if (this.isManuallyDisconnected || this.reconnectInterval) {
-      return;
-    }
+  cleanup() {
+    console.log('[WS] Soft cleanup (listeners nulled, socket kept alive)');
+    this.onConnectionChange = null;
+    this.onSensorData = null;
+    this.onDeviceStatus = null;
+    this.onError = null;
+  }
 
+  _scheduleReconnect(url) {
+    if (this.isManuallyDisconnected || this.reconnectTimeout) return;
     this.reconnectAttempts++;
-    console.log(`Scheduling WebSocket reconnection attempt ${this.reconnectAttempts} in ${this.reconnectDelay}ms`);
-
-    this.reconnectInterval = setTimeout(() => {
-      this.reconnectInterval = null;
-      
-      if (!this.isManuallyDisconnected) {
-        console.log(`WebSocket reconnection attempt ${this.reconnectAttempts}`);
-        this.connect();
-      }
+    console.log(`[WS] Reconnect attempt ${this.reconnectAttempts} in ${this.reconnectDelay}ms`);
+    this.reconnectTimeout = setTimeout(() => {
+      this.reconnectTimeout = null;
+      if (!this.isManuallyDisconnected) this.connect(url);
     }, this.reconnectDelay);
   }
 
-  /**
-   * Send message to WebSocket server
-   * @param {object} message - Message to send
-   */
+  _clearReconnect() {
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
+    }
+  }
+
+  _handleMessage(data) {
+    this.lastDataTime = new Date();
+    switch (data.type) {
+      case 'connected':
+        console.log('[WS] Server confirmed connection');
+        break;
+      case 'sensor_data':
+        console.log('[WS] Sensor data:', JSON.stringify(data.data).slice(0, 120));
+        if (this.onSensorData) this.onSensorData(data.data);
+        break;
+      case 'device_status':
+        console.log('[WS] Device status:', data.device_id, data.status);
+        if (this.onDeviceStatus) this.onDeviceStatus(data.device_id, data.status);
+        break;
+      case 'pong':
+      case 'keepalive':
+        break;
+      case 'status_response':
+        if (this.onDeviceStatus) this.onDeviceStatus('system', { connected_devices: data.devices });
+        break;
+      default:
+        console.log('[WS] Unknown message type:', data.type);
+    }
+  }
+
+  _updateStatus(status) {
+    if (this.connectionStatus === status) return;
+    const prev = this.connectionStatus;
+    this.connectionStatus = status;
+    console.log(`[WS] Status: ${prev} → ${status}`);
+    if (this.onConnectionChange) {
+      this.onConnectionChange(status, {
+        previousStatus: prev,
+        reconnectAttempts: this.reconnectAttempts,
+        lastConnectionTime: this.lastConnectionTime,
+        lastDataTime: this.lastDataTime,
+      });
+    }
+  }
+
   sendMessage(message) {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       try {
         this.ws.send(JSON.stringify(message));
         return true;
-      } catch (error) {
-        console.error('Error sending WebSocket message:', error);
+      } catch (e) {
+        console.error('[WS] Send error:', e);
         return false;
       }
-    } else {
-      console.warn('WebSocket not connected, cannot send message:', message);
-      return false;
     }
+    return false;
   }
 
-  /**
-   * Handle incoming WebSocket messages with optimized processing for real-time updates
-   * @param {object} data - Parsed message data
-   */
-  handleMessage(data) {
-    this.lastDataTime = new Date();
-
-    // Optimized message handling - process sensor data immediately without requestAnimationFrame
-    // to meet sub-50ms rendering requirement
-    switch (data.type) {
-      case 'connected':
-        console.log('WebSocket connection established');
-        break;
-
-      case 'sensor_data':
-        // Critical path: Process sensor data immediately for sub-50ms updates
-        if (this.onSensorData) {
-          this.onSensorData(data.data);
-        }
-        break;
-
-      case 'device_status':
-        if (this.onDeviceStatus) {
-          this.onDeviceStatus(data.device_id, data.status);
-        }
-        break;
-
-      case 'pong':
-        // Minimal pong handling
-        break;
-
-      case 'keepalive':
-        // Server keepalive - no action needed
-        break;
-
-      case 'status_response':
-        if (this.onDeviceStatus) {
-          this.onDeviceStatus('system', { connected_devices: data.devices });
-        }
-        break;
-
-      default:
-        // Minimal logging for unknown messages
-        if (data.type !== 'keepalive') {
-          console.log('Unknown WebSocket message:', data.type);
-        }
-    }
-  }
-
-  /**
-   * Update connection status and notify listeners
-   * @param {string} status - New connection status
-   */
-  updateConnectionStatus(status) {
-    if (this.connectionStatus !== status) {
-      const previousStatus = this.connectionStatus;
-      this.connectionStatus = status;
-      
-      console.log(`WebSocket status changed: ${previousStatus} -> ${status}`);
-      
-      if (this.onConnectionChange) {
-        this.onConnectionChange(status, {
-          previousStatus,
-          reconnectAttempts: this.reconnectAttempts,
-          lastConnectionTime: this.lastConnectionTime,
-          lastDataTime: this.lastDataTime
-        });
-      }
-    }
-  }
-
-  /**
-   * Request device status from server
-   */
   requestDeviceStatus() {
     return this.sendMessage({ type: 'request_device_status' });
   }
 
-  /**
-   * Request connection statistics from server
-   */
-  requestConnectionStats() {
-    return this.sendMessage({ type: 'request_connection_stats' });
-  }
-
-  /**
-   * Get current connection status
-   * @returns {object} Connection status information
-   */
   getConnectionInfo() {
     return {
       status: this.connectionStatus,
@@ -260,33 +207,17 @@ class WebSocketService {
       reconnectAttempts: this.reconnectAttempts,
       lastConnectionTime: this.lastConnectionTime,
       lastDataTime: this.lastDataTime,
-      readyState: this.ws ? this.ws.readyState : WebSocket.CLOSED
+      readyState: this.ws ? this.ws.readyState : 3,
     };
   }
 
-  /**
-   * Set event listeners
-   * @param {object} listeners - Event listener functions
-   */
   setEventListeners(listeners) {
     this.onConnectionChange = listeners.onConnectionChange || null;
     this.onSensorData = listeners.onSensorData || null;
     this.onDeviceStatus = listeners.onDeviceStatus || null;
     this.onError = listeners.onError || null;
   }
-
-  /**
-   * Clean up resources
-   */
-  cleanup() {
-    this.disconnect();
-    this.onConnectionChange = null;
-    this.onSensorData = null;
-    this.onDeviceStatus = null;
-    this.onError = null;
-  }
 }
 
-// Export singleton instance
 export const websocketService = new WebSocketService();
 export default websocketService;

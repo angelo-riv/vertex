@@ -10,24 +10,25 @@
  * - 7.4: Show "Device Disconnected" message with last update time
  */
 
-import React from 'react';
-import { useApp } from '../../context/AppContext';
-import useWebSocket from '../../hooks/useWebSocket';
+import React, { useState, useEffect } from 'react';
+import websocketService from '../../services/websocketService';
 
 const WebSocketStatus = ({ 
   showDetails = false, 
   className = '',
-  size = 'medium' // 'small', 'medium', 'large'
+  size = 'medium'
 }) => {
-  const { state } = useApp();
-  const { 
-    isConnected, 
-    connectionStatus, 
-    reconnectAttempts, 
-    lastConnectionTime, 
-    lastDataTime,
-    connectionQuality 
-  } = useWebSocket({ autoConnect: false }); // Don't auto-connect here, let parent handle it
+  // Poll the singleton service for status — no listener registration
+  const [connectionInfo, setConnectionInfo] = useState(() => websocketService.getConnectionInfo());
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setConnectionInfo(websocketService.getConnectionInfo());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const { status: connectionStatus, isConnected, reconnectAttempts, lastConnectionTime, lastDataTime, connectionQuality } = connectionInfo;
 
   // Determine status color and icon
   const getStatusInfo = () => {
@@ -48,21 +49,14 @@ const WebSocketStatus = ({
           text: 'Connecting...',
           description: 'Establishing WebSocket connection'
         };
+      case 'error':
       case 'disconnected':
         return {
-          color: '#ef4444', // red-500
-          bgColor: '#fee2e2', // red-100
+          color: '#ef4444',
+          bgColor: '#fee2e2',
           icon: '●',
-          text: 'Disconnected',
-          description: reconnectAttempts > 0 ? `Reconnecting... (attempt ${reconnectAttempts})` : 'Connection lost'
-        };
-      case 'error':
-        return {
-          color: '#dc2626', // red-600
-          bgColor: '#fecaca', // red-200
-          icon: '⚠',
-          text: 'Error',
-          description: 'Connection failed'
+          text: reconnectAttempts > 0 ? 'Reconnecting...' : 'Disconnected',
+          description: reconnectAttempts > 0 ? `Attempt ${reconnectAttempts}` : 'Not connected'
         };
       default:
         return {
@@ -184,15 +178,15 @@ const WebSocketStatus = ({
             </div>
           )}
           
-          {lastDataTime && (
+          {connectionInfo.lastDataTime && (
             <div className={`${sizeStyles.details} text-gray-500`}>
               Last data: {formatTime(lastDataTime)}
             </div>
           )}
           
-          {state.esp32.deviceId && (
+          {connectionInfo.status === 'connected' && (
             <div className={`${sizeStyles.details} text-gray-500`}>
-              Device: {state.esp32.deviceId}
+              Device connected
             </div>
           )}
         </div>
