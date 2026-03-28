@@ -56,9 +56,9 @@ int16_t AcX, AcY, AcZ;
 int16_t GyX, GyY, GyZ;
 
 // --- WiFi / Backend Configuration ---
-const char* WIFI_SSID     = "wifiname";
-const char* WIFI_PASSWORD = "wifipass";
-const char* BACKEND_SERVER = "typeipconfig in terminal for ip address ipv4";   // Your backend machine's local IP
+const char* WIFI_SSID     = "Connay";
+const char* WIFI_PASSWORD = "lawaxd!!";
+const char* BACKEND_SERVER = "172.20.10.3";   // Your backend machine's local IP
 const int   BACKEND_PORT   = 8000;
 
 // --- Network State ---
@@ -80,11 +80,17 @@ bool  pusherDetected = false;
 float confidenceLevel = 0.0;
 
 // --- Detection Thresholds ---
-int   TILT_THRESHOLD          = 10;   // degrees
+int   TILT_THRESHOLD          = 10;   // degrees from upright
 int   PRESSURE_DIFF_THRESHOLD = 300;  // FSR raw difference
 unsigned long PERSIST_TIME    = 1500; // ms tilt must persist
 unsigned long tiltStartTime   = 0;
 bool  tiltDetected = false;
+
+// --- Sensor Mounting Offset ---
+// The IMU is mounted on the chest strap measuring lateral (left/right) tilt via atan2(ax, az).
+// Set this to the raw roll value when the patient is standing upright.
+// Re-measure after changing axis — check Serial Monitor "Roll:" value at rest.
+const float MOUNTING_OFFSET = -158.5;  // Upright resting value — normalises to 0°
 
 // --- Calibration ---
 struct CalibrationData {
@@ -210,8 +216,11 @@ void loop() {
 
   handleRetryQueue();
 
-  if (wifiConnected && !retryQueue.hasPendingRetry &&
-      (now - lastDataTransmission >= TRANSMISSION_INTERVAL)) {
+  // Always send fresh data — don't block on retry queue (stale sensor data is useless)
+  if (wifiConnected && (now - lastDataTransmission >= TRANSMISSION_INTERVAL)) {
+    // Cancel any pending retry — fresh data takes priority
+    retryQueue.hasPendingRetry = false;
+    retryQueue.attemptCount    = 0;
     if (postSensorData()) {
       lastDataTransmission = now;
     }
@@ -248,7 +257,9 @@ void readSensors() {
 
   Serial.print("Roll: ");
   Serial.print(roll, 1);
-  Serial.print(" | L: ");
+  Serial.print(" (norm: ");
+  Serial.print(roll - MOUNTING_OFFSET, 1);
+  Serial.print(") | L: ");
   Serial.print(fsrLeft);
   Serial.print(" | R: ");
   Serial.print(fsrRight);
@@ -275,9 +286,11 @@ void imuRead() {
   GyY = Wire.read() << 8 | Wire.read();
   GyZ = Wire.read() << 8 | Wire.read();
 
-  float ay = AcY;
+  // Left/right lateral tilt = atan2(ax, az)
+  // (atan2(ay, az) was front/back pitch — wrong axis for Pusher Syndrome)
+  float ax = AcX;
   float az = AcZ;
-  roll = atan2(ay, az) * 180.0 / PI;
+  roll = atan2(ax, az) * 180.0 / PI;
 }
 
 // =========================
@@ -304,15 +317,13 @@ void fsrRead() {
 // PUSHER DETECTION
 // =========================
 bool detectPusher() {
-  // Apply calibrated baseline offset if available
-  float adjustedRoll = roll;
+  // Normalise roll using mounting offset so 0° = upright
+  float adjustedRoll = roll - MOUNTING_OFFSET;
   float dynamicTiltThreshold     = TILT_THRESHOLD;
   float dynamicPressureThreshold = PRESSURE_DIFF_THRESHOLD;
 
   if (calibration.isValid) {
-    adjustedRoll = roll - calibration.baselineRoll;
     dynamicTiltThreshold = max(5.0f, 2.0f * calibration.rollStdDev);
-
     float currentFsrRatio = (float)fsrRight / (fsrLeft + fsrRight + 1);
     float fsrRatioDiff = abs(currentFsrRatio - calibration.baselineFsrRatio);
     if (fsrRatioDiff > (2.0f * calibration.fsrStdDev / 1000.0f)) {
@@ -391,13 +402,20 @@ void setupWiFi() {
 void connectToWiFi() {
   Serial.print("Connecting to: ");
   Serial.println(WIFI_SSID);
+  Serial.print("Password length: ");
+  Serial.println(strlen(WIFI_PASSWORD));
 
+  WiFi.disconnect(true);
+  delay(500);  // Longer stabilization for battery power
+  WiFi.mode(WIFI_STA);
+  WiFi.setTxPower(WIFI_POWER_19_5dBm);  // Max TX power for battery operation
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
   unsigned long start = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - start < 10000) {
+  while (WiFi.status() != WL_CONNECTED && millis() - start < 30000) {  // 30s timeout
     delay(500);
     Serial.print(".");
+    Serial.print(WiFi.status());  // Print status code each attempt
   }
 
   if (WiFi.status() == WL_CONNECTED) {
@@ -407,9 +425,23 @@ void connectToWiFi() {
     Serial.println();
     Serial.print("Connected! IP: ");
     Serial.println(WiFi.localIP());
+    Serial.print("Backend: ");
+    Serial.print(BACKEND_SERVER);
+    Serial.print(":");
+    Serial.println(BACKEND_PORT);
   } else {
     wifiConnected = false;
-    Serial.println("\nWiFi connection failed.");
+    Serial.println();
+    Serial.print("WiFi connection failed. Status code: ");
+    // Status codes: 0=IDLE, 1=NO_SSID_AVAIL, 2=SCAN_COMPLETED,
+    //               3=CONNECTED, 4=CONNECT_FAILED, 5=CONNECTION_LOST,
+    //               6=DISCONNECTED, 255=NO_SHIELD
+    Serial.println(WiFi.status());
+    if (WiFi.status() == WL_NO_SSID_AVAIL) {
+      Serial.println("-> SSID not found. Check hotspot is ON and name matches exactly.");
+    } else if (WiFi.status() == WL_CONNECT_FAILED) {
+      Serial.println("-> Wrong password.");
+    }
   }
 }
 
@@ -579,7 +611,7 @@ bool postSensorData() {
   doc["device_id"]       = deviceId;
   if (sessionId.length() > 0) doc["session_id"] = sessionId;
   doc["timestamp"]       = millis();
-  doc["roll"]            = round(roll * 10) / 10.0;
+  doc["roll"]            = round((roll - MOUNTING_OFFSET) * 10) / 10.0;  // Normalised: 0° = upright
   doc["fsr_left"]        = fsrLeft;
   doc["fsr_right"]       = fsrRight;
   doc["pusher_detected"] = pusherDetected;
@@ -599,7 +631,7 @@ bool postSensorDataWithRetry(String jsonPayload) {
 
   http.begin(url);
   http.addHeader("Content-Type", "application/json");
-  http.setTimeout(5000);
+  http.setTimeout(2000);  // 2s timeout — fail fast, don't block new readings
 
   int code = http.POST(jsonPayload);
   handleHTTPResponse(code);

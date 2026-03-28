@@ -10,7 +10,7 @@
  *     already OPEN or CONNECTING.
  */
 
-const WS_URL = 'ws://192.168.1.110:8000/ws/sensor-stream';
+const WS_URL = 'ws://172.20.10.3:8000/ws/sensor-stream';
 
 class WebSocketService {
   constructor() {

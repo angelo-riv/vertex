@@ -10,35 +10,38 @@ import SessionPage from './pages/SessionPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import SupportPage from './pages/SupportPage';
 import SettingsPage from './pages/SettingsPage';
+import useDemoControls from './hooks/useDemoControls';
 import './styles/globals.css';
 import './App.css';
+
+// Inner component so hooks can access AppContext
+function AppInner() {
+  useDemoControls(); // W/A/D keys work on every page
+
+  return (
+    <div className="App">
+      <Routes>
+        <Route path="/auth/*" element={<AuthContainer />} />
+        <Route path="/" element={<Navigate to="/auth/" replace />} />
+        <Route element={<MainLayout />}>
+          <Route path="/dashboard" element={<HomePage />} />
+          <Route path="/session" element={<SessionPage />} />
+          <Route path="/analytics" element={<AnalyticsPage />} />
+          <Route path="/support" element={<SupportPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/auth/" replace />} />
+      </Routes>
+    </div>
+  );
+}
 
 function App() {
   return (
     <AppProvider>
       <Router>
         <WebSocketProvider>
-          <div className="App">
-            <Routes>
-              {/* Authentication Routes */}
-              <Route path="/auth/*" element={<AuthContainer />} />
-              
-              {/* Root redirect */}
-              <Route path="/" element={<Navigate to="/auth/" replace />} />
-              
-              {/* Main Application Routes - single shared layout */}
-              <Route element={<MainLayout />}>
-                <Route path="/dashboard" element={<HomePage />} />
-                <Route path="/session" element={<SessionPage />} />
-                <Route path="/analytics" element={<AnalyticsPage />} />
-                <Route path="/support" element={<SupportPage />} />
-                <Route path="/settings" element={<SettingsPage />} />
-              </Route>
-              
-              {/* Fallback */}
-              <Route path="*" element={<Navigate to="/auth/" replace />} />
-            </Routes>
-          </div>
+          <AppInner />
         </WebSocketProvider>
       </Router>
     </AppProvider>

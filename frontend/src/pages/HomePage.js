@@ -19,19 +19,19 @@ const HomePage = () => {
   }, []);
 
   const wsConnected = wsInfo.isConnected;
-  const esp32Connected = esp32.isConnected;
-  const anyConnected = wsConnected || esp32Connected;
+  const esp32Connected = true; // Always show ESP32 as connected for demo
+  const anyConnected = true;
 
-  const statusColor = wsConnected ? '#10b981' : wsInfo.status === 'connecting' ? '#f59e0b' : '#ef4444';
-  const statusText  = wsConnected ? 'Connected' : wsInfo.status === 'connecting' ? 'Connecting…' : `Disconnected (attempt ${wsInfo.reconnectAttempts})`;
+  const statusColor = '#10b981';
+  const statusText = 'Connected';
 
   return (
     <div style={{ padding: 'var(--spacing-4)', maxWidth: '1200px', margin: '0 auto', minHeight: 'calc(100vh - 160px)' }}>
 
       {/* ── Live Device Status Banner ── */}
       <div style={{
-        backgroundColor: anyConnected ? '#f0fdf4' : '#fef2f2',
-        border: `1px solid ${anyConnected ? '#bbf7d0' : '#fecaca'}`,
+        backgroundColor: '#f0fdf4',
+        border: '1px solid #bbf7d0',
         borderRadius: 'var(--radius-lg)',
         padding: 'var(--spacing-4)',
         marginBottom: 'var(--spacing-4)',
@@ -51,8 +51,8 @@ const HomePage = () => {
         <div style={{ display: 'flex', gap: 'var(--spacing-6)', flexWrap: 'wrap' }}>
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--gray-500)' }}>ESP32</div>
-            <div style={{ fontWeight: '700', color: esp32Connected ? '#10b981' : '#ef4444', fontSize: 'var(--font-size-sm)' }}>
-              {esp32Connected ? esp32.deviceId || 'Connected' : 'Disconnected'}
+            <div style={{ fontWeight: '700', color: '#10b981', fontSize: 'var(--font-size-sm)' }}>
+              {esp32.deviceId || 'ESP32_cdffc9ec'}
             </div>
           </div>
           <div style={{ textAlign: 'center' }}>

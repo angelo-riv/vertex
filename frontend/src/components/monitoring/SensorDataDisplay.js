@@ -124,7 +124,7 @@ const SensorDataDisplay = ({
     return (
       <ConnectionFallback 
         onDemoModeActivate={onToggleDemoMode}
-        showInternetStatus={true}
+        showInternetStatus={false}
         className="sensor-display-connection"
       />
     );

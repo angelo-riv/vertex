@@ -6,8 +6,9 @@
 import React, { useEffect, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
 import websocketService from '../../services/websocketService';
+import demoOverride from '../../services/demoOverride';
 
-const WS_URL = 'ws://192.168.1.110:8000/ws/sensor-stream';
+const WS_URL = 'ws://172.20.10.3:8000/ws/sensor-stream';
 
 const WebSocketProvider = ({ children }) => {
   const { actions } = useApp();
@@ -22,15 +23,14 @@ const WebSocketProvider = ({ children }) => {
         console.log('[WebSocketProvider] Connection changed:', status);
         const isConnected = status === 'connected';
         actionsRef.current.setDeviceConnection({ isConnected, deviceId: isConnected ? 'websocket-client' : null });
-        if (!isConnected) {
-          actionsRef.current.setESP32Connection({ isConnected: false, deviceId: null });
-        }
+        // Always keep ESP32 shown as connected for demo purposes
+        actionsRef.current.setESP32Connection({ isConnected: true, deviceId: 'ESP32_cdffc9ec' });
       },
 
       onSensorData: (data) => {
-        // Backend shortened keys: d=device_id, ta=tilt_angle, td=tilt_direction,
-        // fl=fsr_left, fr=fsr_right, al=alert_level, b=balance,
-        // pd=pusher_detected, ss=severity_score, cl=confidence_level
+        // Skip posture updates when demo keyboard override is active
+        if (demoOverride.isActive()) return;
+
         const deviceId   = data.d  ?? data.device_id;
         const tiltAngle  = data.ta ?? data.processed_data?.tilt_angle   ?? 0;
         const tiltDir    = data.td ?? data.processed_data?.tilt_direction ?? 'center';
@@ -75,7 +75,7 @@ const WebSocketProvider = ({ children }) => {
 
       onError: (err) => {
         console.error('[WebSocketProvider] WebSocket error:', err);
-        actionsRef.current.setESP32Connection({ isConnected: false, deviceId: null });
+        // Don't update ESP32 connection on WS error — keep showing as connected for demo
       },
     });
 

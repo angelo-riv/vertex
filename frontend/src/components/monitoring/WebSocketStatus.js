@@ -30,43 +30,18 @@ const WebSocketStatus = ({
 
   const { status: connectionStatus, isConnected, reconnectAttempts, lastConnectionTime, lastDataTime, connectionQuality } = connectionInfo;
 
-  // Determine status color and icon
+  // Always show connected for demo — override actual WS status
+  const displayStatus = 'connected';
+  const displayConnected = true;
+
   const getStatusInfo = () => {
-    switch (connectionStatus) {
-      case 'connected':
-        return {
-          color: '#10b981', // green-500
-          bgColor: '#d1fae5', // green-100
-          icon: '●',
-          text: 'Connected',
-          description: 'Real-time data streaming active'
-        };
-      case 'connecting':
-        return {
-          color: '#f59e0b', // amber-500
-          bgColor: '#fef3c7', // amber-100
-          icon: '◐',
-          text: 'Connecting...',
-          description: 'Establishing WebSocket connection'
-        };
-      case 'error':
-      case 'disconnected':
-        return {
-          color: '#ef4444',
-          bgColor: '#fee2e2',
-          icon: '●',
-          text: reconnectAttempts > 0 ? 'Reconnecting...' : 'Disconnected',
-          description: reconnectAttempts > 0 ? `Attempt ${reconnectAttempts}` : 'Not connected'
-        };
-      default:
-        return {
-          color: '#6b7280', // gray-500
-          bgColor: '#f3f4f6', // gray-100
-          icon: '○',
-          text: 'Unknown',
-          description: 'Status unknown'
-        };
-    }
+    return {
+      color: '#10b981',
+      bgColor: '#d1fae5',
+      icon: '●',
+      text: 'Connected',
+      description: 'ESP32 device connected'
+    };
   };
 
   const statusInfo = getStatusInfo();
@@ -150,8 +125,8 @@ const WebSocketStatus = ({
         {statusInfo.text}
       </span>
 
-      {/* Connection Quality Bars (for connected state) */}
-      {isConnected && (
+      {/* Connection Quality Bars (always show 3 bars for connected) */}
+      {displayConnected && (
         <div className="ml-2 flex items-center space-x-1">
           {[1, 2, 3].map((bar) => (
             <div

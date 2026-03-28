@@ -655,9 +655,9 @@ def update_device_connection(device_id: str, ip_address: Optional[str] = None) -
     return device_connections[device_id]
 
 def check_device_timeouts():
-    """Check for device timeouts (5 seconds of no communication) with enhanced diagnostics"""
+    """Check for device timeouts (30 seconds of no communication) with enhanced diagnostics"""
     now = datetime.now(timezone.utc)
-    timeout_threshold = 5.0  # 5 seconds
+    timeout_threshold = 30.0  # 30 seconds — allows for WiFi reconnection after power cycle
     
     for device_id, status in device_connections.items():
         time_diff = (now - status.last_seen).total_seconds()
